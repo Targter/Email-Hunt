@@ -1,0 +1,219 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// model User {
+//   id            String    @id @default(uuid())
+//   email         String    @unique
+//   name          String? // Changed from fullName to match NextAuth
+//   image         String? // Changed from avatarUrl to match NextAuth
+//   emailVerified DateTime? // Required for some NextAuth features
+
+//   dailyLimit Int @default(10)
+
+//   lastActiveAt DateTime?
+
+//   createdAt DateTime @default(now())
+//   updatedAt DateTime @updatedAt
+
+//   // 1:1 relation
+//   account Account?
+// }
+
+// model Account {
+//   id String @id @default(uuid())
+
+//   userId            String @unique // enforces 1:1
+//   type              String
+//   provider          String @default("google")
+//   providerAccountId String // Google "sub"
+
+//   access_token  String? @db.Text
+//   refresh_token String? @db.Text
+
+//   expires_at    Int?
+//   token_type    String?
+//   scope         String?
+//   id_token      String? @db.Text
+//   session_state String?
+
+//   createdAt DateTime @default(now())
+//   updatedAt DateTime @updatedAt
+
+//   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+//   @@unique([provider, providerAccountId])
+//   @@index([userId])
+// }
+
+// 
+
+enum CampaignStatus {
+  active
+  paused
+  completed
+  archived
+}
+
+enum JDStatus {
+  pending
+  processing
+  ready
+  failed
+}
+
+enum EmailStatus {
+  draft
+  queued
+  processing
+  sent
+  failed
+  cancelled
+}
+
+enum EmailEventType {
+  delivered
+  opened
+  clicked
+  bounced
+  complained
+}
+
+enum ResumeCategory {
+  sde
+  ai
+  webdev
+}
+
+model User {
+  id            String     @id @default(uuid())
+  name          String?
+  email         String     @unique
+  emailVerified DateTime?
+  image         String?
+  dailyLimit    Int        @default(10)
+  lastActiveAt  DateTime?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  accounts      Account[]
+  sessions      Session[]
+  resumes       Resume[]
+  campaigns     Campaign[]
+}
+
+model Account {
+  id                String  @id @default(uuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Resume {
+  id         String          @id @default(uuid())
+  userId     String
+  fileName   String
+  s3Url      String?         @db.Text
+  parsedText String?         @db.Text
+  category   ResumeCategory?
+  parsedJson Json? // Structured AI-ready resume data
+  createdAt  DateTime        @default(now())
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emails     OutboundEmail[]
+}
+
+model Campaign {
+  id                 String           @id @default(uuid())
+  userId             String
+  name               String
+  status             CampaignStatus   @default(active)
+  dailyLimitOverride Int?
+  startDate          DateTime?
+  endDate            DateTime?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  user               User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobDescriptions    JobDescription[]
+  emails             OutboundEmail[]
+}
+
+model JobDescription {
+  id             String         @id @default(uuid())
+  campaignId     String
+  companyName    String
+  roleTitle      String
+  recipientEmail String
+  jdText         String         @db.Text
+  companyUrl     String?
+  status         JDStatus       @default(pending)
+  processedAt    DateTime?
+  createdAt      DateTime       @default(now())
+  campaign       Campaign       @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  email          OutboundEmail?
+}
+
+model OutboundEmail {
+  id                String         @id @default(uuid())
+  campaignId        String
+  resumeId          String
+  jobDescriptionId  String         @unique
+  idempotencyKey    String         @unique // userId + campaignId + jdId
+  jobId             String? // BullMQ Job Reference
+  providerMessageId String? // SMTP/Gmail Message ID
+  subject           String
+  generatedBody     String         @db.Text
+  recipientEmail    String
+  status            EmailStatus    @default(queued)
+  scheduledFor      DateTime
+  sentAt            DateTime?
+  createdAt         DateTime       @default(now())
+  retryCount        Int            @default(0)
+  errorMessage      String?        @db.Text
+  campaign          Campaign       @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  resume            Resume         @relation(fields: [resumeId], references: [id], onDelete: Restrict)
+  jobDescription    JobDescription @relation(fields: [jobDescriptionId], references: [id], onDelete: Cascade)
+  logs              EmailLog[]
+
+  @@index([status, scheduledFor])
+  @@index([campaignId])
+  @@index([recipientEmail])
+}
+
+model EmailLog {
+  id             String         @id @default(uuid())
+  emailId        String
+  event          EmailEventType
+  provider       String?
+  metadata       Json?
+  eventTimestamp DateTime?
+  createdAt      DateTime       @default(now())
+  email          OutboundEmail  @relation(fields: [emailId], references: [id], onDelete: Cascade)
+}
