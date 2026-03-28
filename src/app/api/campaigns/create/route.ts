@@ -145,7 +145,7 @@ export async function POST(req: Request) {
       });
 
       createdEmailIds.push(email.id);
-
+      console.log("app url :::::",`${process.env.NEXTAUTH_URL}/api/worker/process`)
       // --- FIX 3: Move QStash call INSIDE the loop so 'email' and 'index' are available ---
       await qstashClient.publishJSON({
         // Ensure NEXTAUTH_URL is defined in your .env (e.g., http://localhost:3000 or your production domain)
