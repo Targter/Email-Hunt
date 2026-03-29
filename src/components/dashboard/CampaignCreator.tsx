@@ -48,6 +48,7 @@ export function BulkCampaignCreator({ resumes }: { resumes: any[] }) {
 
     setLoading(true);
     try {
+      console.log("jobs:", jobs);
       const res = await fetch("/api/campaigns/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

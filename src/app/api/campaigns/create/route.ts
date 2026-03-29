@@ -40,8 +40,8 @@ export async function POST(req: Request) {
       const jdRecord = await prisma.jobDescription.create({
         data: {
           campaignId: campaign.id,
-          companyName: jd.companyName,
-          roleTitle: jd.roleTitle,
+          companyName: jd.company,
+          roleTitle: jd.title,
           recipientEmail: jd.email,
           jdText: jd.text,
           status: "ready",
