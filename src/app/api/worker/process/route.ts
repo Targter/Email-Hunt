@@ -125,6 +125,13 @@ export async function POST(req: Request) {
         providerMessageId: response.data.id // Store Gmail's ID for tracking
       }
     });
+    // 
+     prisma.emailLog.create({
+    data: {
+      emailId: emailId,
+      event: "delivered", // Using the Enum we defined: delivered
+    }
+  })
 
     console.log(`[SUCCESS] Cold mail sent to ${email.recipientEmail} via Gmail API`);
 
@@ -134,14 +141,24 @@ export async function POST(req: Request) {
     console.error("Worker Execution Error:", error);
 
     // Update DB with the error so the user can see it in the monitor
-    await prisma.outboundEmail.update({
-      where: { id: emailId },
-      data: { 
-        status: "failed", 
-        errorMessage: error.message,
-        retryCount: { increment: 1 }
-      }
-    });
+    // Inside the catch block:
+await prisma.$transaction([
+  prisma.outboundEmail.update({
+    where: { id: emailId },
+    data: { 
+      status: "failed", 
+      errorMessage: error.message 
+    }
+  }),
+  // CREATE THE ERROR LOG
+  prisma.emailLog.create({
+    data: {
+      emailId: emailId,
+      event: "bounced", // Or create a "failed" event type
+      metadata: { error: error.message } // Store the raw error for Abhay to debug
+    }
+  })
+]);
 
     // Returning 500 triggers QStash to retry automatically
     return NextResponse.json({ error: error.message }, { status: 500 });
