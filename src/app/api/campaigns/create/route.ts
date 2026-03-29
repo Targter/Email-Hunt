@@ -29,12 +29,26 @@ export async function POST(req: Request) {
 
     const dailyLimit = session.user.dailyLimit || 10;
     const intervalSeconds = Math.floor(86400 / dailyLimit);
+      // Start the first email 120 seconds (2 minutes) from now
+  const initialOffset = 120; 
     const createdEmailIds: string[] = [];
 
     // --- FIX 2: Safe iteration ---
     for (let index = 0; index < jobDescriptions.length; index++) {
       const jd = jobDescriptions[index];
+      //  const jitter = Math.floor(Math.random() * 300);
+      // const relativeDelay = (index * intervalSeconds) + jitter;
+      //  // Calculate absolute date for Prisma records (visibility in Dashboard)
+      // const scheduledDate = new Date(Date.now() + relativeDelay * 1000);
+
+         const relativeDelay = initialOffset + (index * intervalSeconds);
+    const scheduledDate = new Date(Date.now() + relativeDelay * 1000);
+    // 
       console.log("resumeParsedText:",resume.parsedText,jd.text)
+
+
+
+
       const { subject, body: emailBody } = await generateTailoredEmail(resume.parsedText, jd.text);
 
       const jdRecord = await prisma.jobDescription.create({
@@ -57,7 +71,7 @@ export async function POST(req: Request) {
           subject,
           generatedBody: emailBody,
           idempotencyKey: `idx_${campaign.id}_${jdRecord.id}`,
-          scheduledFor: new Date(Date.now() + (index * intervalSeconds * 1000)), // Set specific time
+          scheduledFor: scheduledDate,
           status: "queued",
         },
       });
@@ -73,7 +87,7 @@ export async function POST(req: Request) {
             emailId: emailRecord.id,
             userId: session.user.id
           },
-          delay: index * intervalSeconds, 
+          delay: relativeDelay, 
           retries: 3,
         });
       }
